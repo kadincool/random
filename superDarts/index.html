@@ -1,0 +1,593 @@
+<!doctype html>
+<style>
+body {
+  margin: 0;
+  overflow: hidden;
+  /*background-color: black;*/
+}
+/*canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}*/
+</style>
+<canvas id="gameCanvas"></canvas>
+<script>
+  /////////////
+ // classes //
+/////////////
+
+class Target {
+  x; y;
+  velX = 0; velY = 0;
+  size = 30;
+  toDelete = false;
+  broken = false;
+  score = 0;
+
+  constructor(x, y, velX = 0, velY = 0) {
+    this.x = x;
+    this.y = y;
+    this.velX = velX;
+    this.velY = velY;
+  }
+
+  tick(delta) {
+    this.x += this.velX * delta * 50;
+    this.y += this.velY * delta * 50;
+    this.velY += 9.8 * delta;
+    if (this.x < 0) {
+      this.x = 0;
+      this.velX *= -1;
+    }
+    if (this.x > screen.width) {
+      this.x = screen.width;
+      this.velX *= -1;
+    }
+    
+    if (this.y > screen.height + this.size)
+      this.toDelete = true;
+      
+    if (mouse.down && Math.hypot(mouse.x - this.x, mouse.y - this.y) <= this.size) {
+      this.toDelete = true;
+      this.broken = true;
+      this.score = 1;
+      if (Math.abs(this.velY) < 5)
+        this.score += 1;
+      if (Math.abs(this.velY) < 1.5)
+        this.score += 1;
+      //this.score = Math.abs(this.velY).toFixed(2);
+    }
+  }
+
+  draw() {
+    for (let i = 0; i < this.size / 5; i++) {
+      if (i % 2 == 0) {
+        can2d.fillStyle = colors.white;
+      } else {
+        can2d.fillStyle = colors.elem;
+      }
+      fillCircle(this.x, this.y, this.size - 5 * i);
+    } 
+  }
+}
+
+class TargetTimer {
+  timer = 0;
+
+  constructor() {
+    this.timer = Math.random() * 1 + 0.5;
+  }
+
+  tick(delta) {
+    let add = 0;
+    while (delta >= this.timer) {
+      add++;
+      delta -= this.timer;
+      this.timer = Math.random() * 3;
+    }
+    this.timer -= delta;
+    return add;
+  }
+}
+
+class BreakParticle {
+  x; y;
+  velX; velY;
+  lifespan = 0.3;
+  toDelete = false;
+  
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    let dir = Math.random() * 2 * Math.PI;
+    this.velX = Math.cos(dir) * 250;
+    this.velY = Math.sin(dir) * 250;
+  }
+  
+  tick(delta) {
+    this.lifespan -= delta;
+    this.x += this.velX * delta;
+    this.y += this.velY * delta;
+    if (this.lifespan <= 0) this.toDelete = true;
+  }
+  
+  draw() {
+    can2d.fillStyle = colors.elem;
+    fillCircle(this.x, this.y, 30 * this.lifespan);
+  }
+}
+
+class TextParticle {
+  x; y;
+  velX; velY;
+  lifespan = 0.5;
+  toDelete = false;
+  text;
+  
+  constructor(x, y, text = "") {
+    this.x = x;
+    this.y = y;
+    this.text = text;
+    this.velX = 0;
+    this.velY = -100;
+  }
+  
+  tick(delta) {
+    this.lifespan -= delta;
+    this.x += this.velX * delta;
+    this.y += this.velY * delta;
+    if (this.lifespan <= 0) this.toDelete = true;
+  }
+  
+  draw() {
+    can2d.font = "bold 24px Georgia";
+    can2d.textAlign = "center";
+    can2d.textBaseline = "middle";
+    can2d.fillStyle = colors.white;
+    can2d.fillText(this.text, this.x, this.y);
+  }
+}
+
+class Menu {
+  elements = [];
+  buffer = 10;
+  leftAligned = false;
+  
+  constructor(...elements) {
+    this.elements = elements;
+  }
+  
+  leftAlign(set = true) {
+    this.leftAligned = set;
+    for (let element of this.elements)
+      element.leftAligned = set;
+  }
+  
+  tick() {
+    let totalHeight = 0;
+    for (let i = 0; i < this.elements.length; i++) {
+      totalHeight += this.elements[i].height;
+      if (i != 0) totalHeight += this.buffer;
+    }
+    
+    let renderX = screen.width / 2;
+    let renderY = screen.height / 2 - totalHeight / 2;
+    if (this.leftAligned) renderX = this.buffer;
+    for (let element of this.elements) {
+      element.tick(renderX, renderY);
+      renderY += element.height + this.buffer;
+    }
+  }
+  
+  draw() {
+    let totalHeight = 0;
+    for (let i = 0; i < this.elements.length; i++) {
+      totalHeight += this.elements[i].height;
+      if (i != 0) totalHeight += this.buffer;
+    }
+    
+    let renderX = screen.width / 2;
+    let renderY = screen.height / 2 - totalHeight / 2;
+    if (this.leftAligned) renderX = this.buffer;
+    for (let element of this.elements) {
+      element.draw(renderX, renderY);
+      renderY += element.height + this.buffer;
+    }
+  }
+}
+
+class MenuText {
+  text = "";
+  fontSize = 36;
+  leftAligned = false;
+  
+  constructor(text, fontSize = 36, leftAligned = false) {
+    this.text = text;
+    this.fontSize = fontSize;
+    this.leftAligned = leftAligned;
+  }
+  
+  get height() {
+    return this.fontSize;
+  }
+  
+  tick() {}
+  
+  draw(x, y) {
+    can2d.font = `bold ${this.fontSize}px Georgia`;
+    can2d.textAlign = "center";
+    can2d.textBaseline = "top";
+    if (this.leftAligned) can2d.textAlign = "left";
+    can2d.fillStyle = colors.white;
+    can2d.fillText(this.text, x, y);
+  }
+}
+
+class MenuButton {
+  width = 125;
+  height = 42;
+  text = "";
+  func;
+  leftAligned = false;
+  
+  constructor(text, func, width = 125, height = 42, leftAligned = false) {
+    this.text = text;
+    this.func = func;
+    this.width = width;
+    this.height = height;
+    this.leftAligned = leftAligned;
+  }
+  
+  getRect(x, y) {
+    if (this.leftAligned)
+      return {x: x, y: y, wid: this.width, hei: this.height};
+    else
+      return {x: x - this.width / 2, y: y, wid: this.width, hei: this.height};
+  }
+  
+  tick(x, y) {
+    let rect = this.getRect(x, y);
+    if (pointInRect(mouse, rect) && mouse.released) {
+      this.func();
+      mouse.released = false;
+    }
+  }
+  
+  draw(x, y) {
+    let rect = this.getRect(x, y);
+    can2d.strokeStyle = colors.white;
+    can2d.fillStyle = colors.dim;
+    if (mouse.down) can2d.fillStyle = colors.elem;
+    can2d.lineWidth = 2;
+    if (pointInRect(mouse, rect))
+      can2d.fillRect(rect.x, rect.y, rect.wid, rect.hei);
+    can2d.strokeRect(rect.x, rect.y, rect.wid, rect.hei);
+    can2d.font = "bold 24px Georgia";
+    can2d.textAlign = "center";
+    can2d.textBaseline = "middle";
+    can2d.fillStyle = colors.white;
+    can2d.fillText(this.text, rect.x + rect.wid / 2, rect.y + rect.hei / 2);
+  }
+}
+
+  ///////////////
+ // variables //
+///////////////
+
+let canvas = document.getElementById("gameCanvas");
+let can2d = canvas.getContext("2d");
+
+let screen = {
+  width: 500,
+  height: 500,
+  scale: 1.5,
+};
+
+let colors = {
+  bg: "blue",
+  white: "white",
+  elem: "red",
+  dim: "#0000007f",
+};
+
+let mouse = {
+  x: 0,
+  y: 0,
+  down: false,
+  released: false,
+};
+
+let mode = "mainmenu";
+let lastTime = Date.now();
+let game = null;
+
+
+let menus = {
+  gameover: new Menu(
+    new MenuText("Game Over!"),
+    //new MenuText(`Score: ${game.score} / ${(3 * game.total)}`),
+    new MenuText("Score: 0 (0%)", 24),
+    new MenuText("Rank: F", 24),
+    new MenuButton("Replay", () => {initGame(game.total)}),
+    new MenuButton("Back", () => {mode = "mainmenu"}),
+  ),
+  main: new Menu(
+    new MenuText("Super Darts"),
+    new MenuButton("Play", initGame, 200),
+    new MenuButton("Quickplay", () => {initGame(20)}, 200),
+    new MenuButton("Zen", () => {initGame(Infinity)}, 200),
+    new MenuButton("More Games", () => {window.location = "https://kadincool.github.io"}, 200),
+  ),
+  pause: new Menu(
+    new MenuText("Paused!"),
+    new MenuButton("Resume", () => {game.paused = false}),
+    new MenuButton("Exit", () => {mode = "mainmenu"}),
+    new MenuButton("Restart", () => {initGame(game.total)}),
+  ),
+};
+menus.pause.leftAlign()
+
+  //////////////////////
+ // helper functions //
+//////////////////////
+
+function fillCircle(x, y, radius) {
+  can2d.beginPath();
+  can2d.arc(x, y, radius, 0, 2 * Math.PI);
+  can2d.fill();
+}
+
+function pointInRect(point, rect) {
+  return point.x >= rect.x && point.x <= rect.x + rect.wid && point.y >= rect.y && point.y <= rect.y + rect.hei;
+}
+
+function getScoreLetter(percentage) {
+  if (percentage >= 100)
+    return "SSS";
+  else if (percentage >= 90)
+    return "SS";
+  else if (percentage >= 80)
+    return "S+";
+  else if (percentage >= 70)
+    return "S";
+  else if (percentage >= 60)
+    return "A";
+  else if (percentage >= 50)
+    return "B";
+  else if (percentage >= 40)
+    return "C";
+  else if (percentage >= 30)
+    return "D";
+  else
+    return "F";
+}
+
+  ///////////////
+ // main loop //
+///////////////
+
+function init() {
+  //initGame();
+  tick();
+}
+
+function initGame(count = 100) {
+  mode = "game";
+  game = {
+    targets: [],
+    timers: [],
+    particles: [],
+    total: 0,
+    remaining: 0,
+    destroyed: 0,
+    score: 0,
+    paused: false,
+  };
+  
+  game.total = count;
+  game.remaining = game.total;
+  game.timers.push(new TargetTimer());
+  game.timers.push(new TargetTimer());
+}
+
+function endGame() {
+  mode = "gameover";
+  let percentage = (game.score / (3 * game.total)) * 100;
+  menus.gameover.elements[1].text = `Score: ${game.score} (${percentage.toFixed(0)}%)`;
+  let scoreLetter = getScoreLetter(percentage);
+  menus.gameover.elements[2].text = `Rank: ${scoreLetter}`;
+}
+
+function tick() {
+  let delta = Date.now() - lastTime;
+  lastTime += delta;
+  delta /= 1000;
+  delta = Math.min(delta, 0.2);
+  
+  if (mode === "game") 
+    tickGame(delta);
+  
+  if (mode === "gameover")
+    menus.gameover.tick();
+    
+  if (mode === "mainmenu")
+    menus.main.tick();
+  
+  draw();
+  mouse.released = false;
+  requestAnimationFrame(tick);
+}
+
+function tickGame(delta) {
+  if (game.paused) {
+    menus.pause.tick();
+    return;
+  }
+
+  {
+    let add = 0;
+    for (let timer of game.timers)
+      add += timer.tick(delta);
+      
+    add = Math.min(add, game.remaining);
+    
+    for (let i = 0; i < add; i++)
+      game.targets.push(new Target(Math.floor(Math.random() * screen.width), screen.height + 30, Math.random() * 6 - 3, Math.random() * 8 - 14));
+    game.remaining -= add;
+  }
+  
+  for (let i = 0; i < game.particles.length; i++) {
+    let particle = game.particles[i]
+    particle.tick(delta);
+    if (particle.toDelete) {
+      game.particles.splice(i, 1);
+      i--;
+    }
+  }
+  
+  for (let i = 0; i < game.targets.length; i++) {
+    let target = game.targets[i]
+    target.tick(delta);
+    if (target.toDelete) {
+      if (target.broken) {
+        for (let i = 0; i < 10; i++) 
+          game.particles.push(new BreakParticle(target.x, target.y));
+        game.particles.push(new TextParticle(target.x, target.y, `+${target.score}`));
+        game.score += target.score; 
+      }
+      game.targets.splice(i, 1);
+      game.destroyed++;
+      i--;
+    }
+  }
+  
+  if (game.remaining == 0 && game.targets.length == 0 && game.particles.length == 0)
+    endGame();
+    
+  if (mouse.released && pointInRect(mouse, {x: screen.width - 30, y: 10, wid: 20, hei: 20}))
+    game.paused = true;
+}
+
+function draw() {
+  screen.scale = window.innerHeight / 500;
+  screen.width = window.innerWidth / screen.scale;
+  screen.height = window.innerHeight / screen.scale;
+  canvas.width = screen.width * screen.scale;
+  canvas.height = screen.height * screen.scale;
+  can2d.scale(screen.scale, screen.scale);
+  can2d.fillStyle = colors.bg;
+  can2d.fillRect(0, 0, screen.width, screen.height);
+  
+  if (mode === "game")
+    drawGame();
+  
+  if (mode === "mainmenu")
+    menus.main.draw();
+  
+  if (mode === "gameover")
+    menus.gameover.draw();
+  
+  if (mouse.down) {
+    can2d.fillStyle = colors.white;
+    fillCircle(mouse.x, mouse.y, 5);
+  }
+}
+
+function drawGame() {
+  can2d.font = "bold 36px Georgia";
+  can2d.textAlign = "left";
+  can2d.textBaseline = "top";
+  can2d.fillStyle = colors.white;
+  can2d.fillText(`Score: ${game.score}`, 10, 10);
+  can2d.font = "bold 24px Georgia";
+  if (game.remaining == Infinity) {
+    if (game.destroyed > 0) {
+      let percentage = game.score / game.destroyed / 3 * 100;
+      can2d.fillText(`Rank: ${getScoreLetter(percentage)} (${percentage.toFixed(0)}%)`, 10, 50);
+    }
+  } else {
+    can2d.fillText(`Remaining: ${game.remaining}`, 10, 50);
+    if (game.destroyed > 0) {
+      let percentage = game.score / game.destroyed / 3 * 100;
+      can2d.fillText(`Rank: ${getScoreLetter(percentage)} (${percentage.toFixed(0)}%)`, 10, 80);
+    }
+  }
+  for (let particle of game.particles) {
+    particle.draw();
+  }
+  
+  for (let target of game.targets) {
+    target.draw();
+  }
+  
+  // pause button
+  can2d.fillStyle = colors.white;
+  if (pointInRect(mouse, {x: screen.width - 30, y: 10, wid: 20, hei: 20}))
+    can2d.fillStyle = colors.elem;
+  can2d.fillRect(screen.width - 30, 10, 7, 20);
+  can2d.fillRect(screen.width - 17, 10, 7, 20);
+  
+  if (game.paused) {
+    can2d.fillStyle = colors.dim;
+    can2d.fillRect(0, 0, screen.width, screen.height);
+    menus.pause.draw();
+  }
+}
+init();
+
+  ///////////////
+ // detectors //
+///////////////
+
+canvas.addEventListener("mousemove", (e) => {
+  //console.log(e.offsetX, e.offsetY);
+  mouse.x = e.offsetX / screen.scale;
+  mouse.y = e.offsetY / screen.scale;
+});
+
+canvas.addEventListener("mousedown", (e) => {
+  //console.log(e.offsetX, e.offsetY);
+  mouse.down = true;
+  mouse.x = e.offsetX / screen.scale;
+  mouse.y = e.offsetY / screen.scale;
+});
+
+canvas.addEventListener("mouseup", (e) => {
+  //console.log(e.offsetX, e.offsetY);
+  mouse.down = false;
+  mouse.released = true;
+  mouse.x = e.offsetX / screen.scale;
+  mouse.y = e.offsetY / screen.scale;
+});
+
+canvas.addEventListener("touchstart", (e) => {
+  let touch = e.changedTouches[0];
+  mouse.down = true;
+  if (!touch) return;
+  mouse.x = touch.pageX / screen.scale;
+  mouse.y = touch.pageY / screen.scale;
+  e.preventDefault();
+});
+
+canvas.addEventListener("touchend", (e) => {
+  if (e.touches.length != 0) return; 
+  mouse.down = false;
+  mouse.released = true;
+  e.preventDefault();
+});
+
+canvas.addEventListener("touchcancel", (e) => {
+  mouse.down = false;
+  e.preventDefault();
+});
+
+canvas.addEventListener("touchmove", (e) => {
+  let touch = e.changedTouches[0];
+  if (!touch) return;
+  mouse.x = touch.pageX / screen.scale;
+  mouse.y = touch.pageY / screen.scale;
+  e.preventDefault();
+});
+</script>
