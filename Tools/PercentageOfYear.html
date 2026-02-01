@@ -1,0 +1,136 @@
+<!doctype html>
+<style>
+  body {
+    background-color: #333;
+    color: #fff;
+    user-select: none;
+  }
+  #about {
+    color: #777;
+    font-size: 9pt;
+  }
+  #about a {
+    color: #777;
+  }
+  #pseudoLink {
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  #innerBody {
+    width: min(750pt, 95vw);
+    /* margin: auto;*/
+    position: absolute;
+    left: 50%; 
+    top: 50%; 
+    --scale: 1.0;
+    transform: translate(-50%, -50%) scale(var(--scale));
+  }
+  h1 {
+    text-align: center;
+  }
+  #yearDone {
+    text-align: center;
+  }
+  button {
+    background-color: #444;
+    color: #fff;
+    border-radius: 8px;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #555;
+  }
+  .selector {
+    background-color: #222;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+  }
+  #progressBar {
+    background-color: #222;
+    height: 10px;
+    /* border: solid #444;*/
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  #innerProgressBar {
+    background-color: #ff0;
+    height: 100%;
+    width: 0%;
+    border-radius: 8px;
+  }
+</style>
+<div id="about">
+  <p>(c) 2026 Kadin Cool</p>
+  <a href="https://kadincool.github.io">kadincool.github.io</a>
+  <p id="pseudoLink" onClick='toggleControls();'>toggle controls</p>
+</div>
+<div id="innerBody">
+  <h1>Percentage of year done</h1>
+  <p id="yearDone">The year is % done!</p>
+  <div id="progressBar">
+    <div id="innerProgressBar"></div>
+  </div>
+  <div id="controls" style="display: none;">
+    <h2>Controls:</h2>
+    <div class="selector">
+      <p>Tone:</p>
+      <button onClick='tone = "optimistic"'>Optimistic</button>
+      <button onClick='tone = "neutral"'>Neutral</button>
+      <button onClick='tone = "pessimistic"'>Pessimistic</button>
+    </div>
+    <div class="selector">
+      <p>Precision:</p>
+      <button onClick='precision = 0'>0 decimals</button>
+      <button onClick='precision = 1'>1 decimals</button>
+      <button onClick='precision = 2'>2 decimals</button>
+      <button onClick='precision = 3'>3 decimals</button>
+      <button onClick='precision = 4'>4 decimals</button>
+      <button onClick='precision = 5'>5 decimals</button>
+      <button onClick='precision = 6'>6 decimals</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const yearDone = document.getElementById("yearDone");
+const innerProgressBar = document.getElementById("innerProgressBar");
+const controls = document.getElementById("controls");
+const innerBody = document.getElementById("innerBody");
+
+const toneTerms = {optimistic: "only ", neutral: "", pessimistic: "already "};
+let tone = "neutral";
+let precision = 2;
+let controlsShown = false;
+
+function update() {
+  let now = new Date();
+  let yearStart = new Date(now.getFullYear(), 0);
+  let yearEnd = new Date(now.getFullYear() + 1, 0);
+  let yearDuration = yearEnd - yearStart;
+  let yearFinished = (now - yearStart) / yearDuration;
+  // console.log(yearFinished);
+  
+  innerProgressBar.style.width = `${(yearFinished * 100).toFixed(6)}%`;
+  yearDone.innerHTML = `The year is ${toneTerms[tone]}${(yearFinished * 100).toFixed(precision)}% done!`;
+}
+update();
+setInterval(update, 66);
+
+function toggleControls() {
+  controlsShown = !controlsShown;
+  if (controlsShown) {
+    controls.style.display = "";
+  } else {
+    controls.style.display = "none";
+  }
+}
+
+function setScale() {
+  innerBody.style.setProperty("--scale", window.innerWidth / 1500);
+}
+setScale();
+window.addEventListener('resize', setScale);
+</script>
